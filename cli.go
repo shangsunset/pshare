@@ -19,9 +19,7 @@ func main() {
 	serviceTag := "_foobar._tcp"
 	waitTime := 5
 	clientNum := 0
-
 	if *file != "" {
-
 		s := p2p.NewServer(serviceTag, *file, waitTime, clientNum)
 
 		// Clean exit.
@@ -46,8 +44,10 @@ func main() {
 			}
 		}()
 
-		go s.Register()
-
+		err := s.Register()
+		if err != nil {
+			log.Fatal(err)
+		}
 	} else {
 		fmt.Println("connecting...")
 		p2p.Connect(serviceTag, waitTime)
