@@ -17,15 +17,13 @@ func main() {
 	flag.Parse()
 
 	serviceTag := "_foobar._tcp"
-	waitTime := 2000
-	clientNum := 5
+	waitTime := 5
+	clientNum := 0
+
 	if *file != "" {
+
 		s := p2p.NewServer(serviceTag, *file, waitTime, clientNum)
-		err := s.Register()
-		if err != nil {
-			log.Fatal(err)
-		}
-		log.Println("mDNS shutting down.")
+
 		// Clean exit.
 		sig := make(chan os.Signal, 1)
 		signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
@@ -35,18 +33,21 @@ func main() {
 			tc = time.After(time.Second * time.Duration(s.Duration))
 		}
 
-		select {
-		case <-sig:
-			// Exit by user
-			log.Println("Exited")
-			return
-		case <-tc:
-			// Exit by timeout
-			log.Println("Timed out")
-			return
-		default:
-		}
-		return
+		go func() {
+			select {
+			case <-sig:
+				// Exit by user
+				log.Println("Exited")
+				os.Exit(1)
+			case <-tc:
+				// Exit by timeout
+				log.Println("Timed out")
+				os.Exit(1)
+			}
+		}()
+
+		go s.Register()
+
 	} else {
 		fmt.Println("connecting...")
 		p2p.Connect(serviceTag, waitTime)

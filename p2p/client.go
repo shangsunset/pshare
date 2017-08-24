@@ -28,7 +28,7 @@ func connect(host string, port int) {
 	for {
 		_, err = conn.Read(buffer)
 		if err == io.EOF {
-			log.Fatal(err)
+			log.Println(err)
 		}
 		if err != nil {
 			log.Fatal(err)

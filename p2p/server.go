@@ -5,32 +5,39 @@ import (
 	"io"
 	"net"
 	"os"
-	"time"
+	"sync"
 
 	"github.com/grandcat/zeroconf"
 )
 
 type Server struct {
-	Port       int
-	ServiceTag string
-	FilePath   string
-	Duration   int
-	ClientNum  int
+	Port        int
+	ServiceTag  string
+	Source      string
+	Duration    int
+	ConnNum     int
+	ClientConns map[net.Addr]*net.TCPConn
+	ErrCh       chan *ClientErr
+	FinishedCh  chan net.Addr
+
+	mu sync.Mutex
 }
 
-type Socket struct {
-	conn net.Conn
-	errs chan error
-	done chan bool
+type ClientErr struct {
+	addr net.Addr
+	err  error
 }
 
 func NewServer(tag, file string, duration, num int) *Server {
 	server := &Server{
-		Port:       9000,
-		ServiceTag: tag,
-		FilePath:   file,
-		Duration:   duration,
-		ClientNum:  num,
+		Port:        9000,
+		ServiceTag:  tag,
+		Source:      file,
+		Duration:    duration,
+		ConnNum:     num,
+		ErrCh:       make(chan *ClientErr),
+		FinishedCh:  make(chan net.Addr),
+		ClientConns: make(map[net.Addr]*net.TCPConn),
 	}
 	return server
 }
@@ -69,58 +76,73 @@ func (s *Server) Register() error {
 }
 
 func (s *Server) Serve(ln *net.TCPListener) error {
-	duration := time.Now().Add(time.Duration(s.Duration) * time.Second)
-	// finished := 0
-	for {
-		ln.SetDeadline(duration)
-		conn, err := ln.AcceptTCP()
-		if err != nil {
-			if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
-				return fmt.Errorf("connection expired; lasted for %v", s.Duration)
+	// duration := time.Now().Add(time.Duration(s.Duration) * time.Second)
+	finished := 0
+	go func() {
+		for {
+			select {
+			case cerr := <-s.ErrCh:
+				fmt.Errorf("Error from %v: %v\n", cerr.addr, cerr.err)
+				err := s.ClientConns[cerr.addr].Close()
+				if err != nil {
+					fmt.Errorf("Failded to close client connection: %v\n", err)
+				}
+				return
+			case c := <-s.FinishedCh:
+				fmt.Printf("%v is done receiving\n", c)
+				err := s.ClientConns[c].Close()
+				if err != nil {
+					fmt.Errorf("Failded to close client connection: %v\n", err)
+				}
+				s.mu.Lock()
+				s.ClientConns[c].Close()
+				finished++
+				s.mu.Unlock()
+				if finished == s.ConnNum {
+					err := ln.Close()
+					if err != nil {
+						fmt.Errorf("Failded to shut done listener: %v\n", err)
+					}
+					fmt.Println("connection closed")
+				}
+				return
 			}
 		}
-		fmt.Println(conn.RemoteAddr())
-		soc := &Socket{
-			conn: conn,
-			errs: make(chan error),
-			done: make(chan bool),
+	}()
+
+	for {
+		// ln.SetDeadline(duration)
+		conn, err := ln.AcceptTCP()
+		if err != nil {
+			// if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
+			// 	return fmt.Errorf("connection expired; lasted for %v", s.Duration)
+			// }
+			return err
 		}
-		go s.handleRequest(soc)
+		s.ClientConns[conn.RemoteAddr()] = conn
+		go s.handleConn(conn)
 	}
-	// select {
-	// case err := <-soc.errs:
-	// 	if err != nil {
-	// 		return fmt.Errorf("error from streaming data: %v", err)
-	// 	}
-	// case <-soc.done:
-	// 	log.Printf("%v is done\n", conn.RemoteAddr())
-	// 	finished++
-	// 	if finished == s.ClientNum {
-	// 		soc.conn.Close()
-	// 		return nil
-	// 	}
-	// }
 	return nil
 }
 
-func (s *Server) handleRequest(soc *Socket) {
-	f, err := os.Open(s.FilePath)
+func (s *Server) handleConn(conn *net.TCPConn) {
+	f, err := os.Open(s.Source)
 	if err != nil {
-		soc.errs <- err
+		s.ErrCh <- &ClientErr{conn.RemoteAddr(), err}
 	}
 	defer f.Close()
 
-	buf := make([]byte, 6)
+	buf := make([]byte, 1024)
 	for {
 		n, err := f.Read(buf)
 		if err == io.EOF {
-			soc.done <- true
+			s.FinishedCh <- conn.RemoteAddr()
 			break
 		}
 		if err != nil {
-			soc.errs <- err
+			s.ErrCh <- &ClientErr{conn.RemoteAddr(), err}
 			return
 		}
-		soc.conn.Write(buf[:n])
+		conn.Write(buf[:n])
 	}
 }
