@@ -13,14 +13,15 @@ import (
 )
 
 func main() {
-	file := flag.String("file", "", "path to source file")
+	src := flag.String("src", "", "path to source file")
+	instanceName := flag.String("name", "", "service instance name")
 	flag.Parse()
 
 	serviceTag := "_foobar._tcp"
-	waitTime := 5
+	waitTime := 50
 	clientNum := 0
-	if *file != "" {
-		s := p2p.NewServer(serviceTag, *file, waitTime, clientNum)
+	if *src != "" {
+		s := p2p.NewServer(*instanceName, serviceTag, *src, waitTime, clientNum)
 
 		// Clean exit.
 		sig := make(chan os.Signal, 1)

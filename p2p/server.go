@@ -5,45 +5,48 @@ import (
 	"io"
 	"net"
 	"os"
+	"strconv"
 	"sync"
 
 	"github.com/grandcat/zeroconf"
 )
 
 type Server struct {
-	Port        int
-	ServiceTag  string
-	Source      string
-	Duration    int
-	ConnNum     int
-	ClientConns map[net.Addr]*net.TCPConn
-	ErrCh       chan *ClientErr
-	FinishedCh  chan net.Addr
+	Port         int
+	InstanceName string
+	ServiceTag   string
+	Duration     int
+	src          string
+	connNum      int
+	errCh        chan *clientErr
+	finishedCh   chan net.Addr
 
-	mu sync.Mutex
+	mu          sync.Mutex
+	clientConns map[net.Addr]*net.TCPConn
 }
 
-type ClientErr struct {
+type clientErr struct {
 	addr net.Addr
 	err  error
 }
 
-func NewServer(tag, file string, duration, num int) *Server {
+func NewServer(instance, tag, file string, duration, num int) *Server {
 	server := &Server{
-		Port:        9000,
-		ServiceTag:  tag,
-		Source:      file,
-		Duration:    duration,
-		ConnNum:     num,
-		ErrCh:       make(chan *ClientErr),
-		FinishedCh:  make(chan net.Addr),
-		ClientConns: make(map[net.Addr]*net.TCPConn),
+		Port:         freePort(),
+		InstanceName: instance,
+		ServiceTag:   tag,
+		Duration:     duration,
+		src:          file,
+		connNum:      num,
+		errCh:        make(chan *clientErr),
+		finishedCh:   make(chan net.Addr),
+		clientConns:  make(map[net.Addr]*net.TCPConn),
 	}
 	return server
 }
 
 func (s *Server) Open() error {
-	addr, err := net.ResolveTCPAddr("tcp", ":9000")
+	addr, err := net.ResolveTCPAddr("tcp", ":"+strconv.Itoa(s.Port))
 	if nil != err {
 		return err
 	}
@@ -61,7 +64,7 @@ func (s *Server) Open() error {
 }
 
 func (s *Server) Register() error {
-	server, err := zeroconf.Register("my awesome service", s.ServiceTag, "local", s.Port, []string{"txtv=0", "lo=1", "la=2"}, nil)
+	server, err := zeroconf.Register(s.InstanceName, s.ServiceTag, "local.", s.Port, []string{"txtv=0", "lo=1", "la=2"}, nil)
 	if err != nil {
 		return err
 	}
@@ -81,24 +84,24 @@ func (s *Server) Serve(ln *net.TCPListener) error {
 	go func() {
 		for {
 			select {
-			case cerr := <-s.ErrCh:
+			case cerr := <-s.errCh:
 				fmt.Errorf("Error from %v: %v\n", cerr.addr, cerr.err)
-				err := s.ClientConns[cerr.addr].Close()
+				err := s.clientConns[cerr.addr].Close()
 				if err != nil {
 					fmt.Errorf("Failded to close client connection: %v\n", err)
 				}
 				return
-			case c := <-s.FinishedCh:
+			case c := <-s.finishedCh:
 				fmt.Printf("%v is done receiving\n", c)
-				err := s.ClientConns[c].Close()
+				err := s.clientConns[c].Close()
 				if err != nil {
 					fmt.Errorf("Failded to close client connection: %v\n", err)
 				}
 				s.mu.Lock()
-				s.ClientConns[c].Close()
+				s.clientConns[c].Close()
 				finished++
 				s.mu.Unlock()
-				if finished == s.ConnNum {
+				if finished == s.connNum {
 					err := ln.Close()
 					if err != nil {
 						fmt.Errorf("Failded to shut done listener: %v\n", err)
@@ -111,24 +114,20 @@ func (s *Server) Serve(ln *net.TCPListener) error {
 	}()
 
 	for {
-		// ln.SetDeadline(duration)
 		conn, err := ln.AcceptTCP()
 		if err != nil {
-			// if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
-			// 	return fmt.Errorf("connection expired; lasted for %v", s.Duration)
-			// }
 			return err
 		}
-		s.ClientConns[conn.RemoteAddr()] = conn
+		s.clientConns[conn.RemoteAddr()] = conn
 		go s.handleConn(conn)
 	}
 	return nil
 }
 
 func (s *Server) handleConn(conn *net.TCPConn) {
-	f, err := os.Open(s.Source)
+	f, err := os.Open(s.src)
 	if err != nil {
-		s.ErrCh <- &ClientErr{conn.RemoteAddr(), err}
+		s.errCh <- &clientErr{conn.RemoteAddr(), err}
 	}
 	defer f.Close()
 
@@ -136,11 +135,11 @@ func (s *Server) handleConn(conn *net.TCPConn) {
 	for {
 		n, err := f.Read(buf)
 		if err == io.EOF {
-			s.FinishedCh <- conn.RemoteAddr()
+			s.finishedCh <- conn.RemoteAddr()
 			break
 		}
 		if err != nil {
-			s.ErrCh <- &ClientErr{conn.RemoteAddr(), err}
+			s.errCh <- &clientErr{conn.RemoteAddr(), err}
 			return
 		}
 		conn.Write(buf[:n])

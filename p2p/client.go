@@ -28,12 +28,12 @@ func connect(host string, port int) {
 	for {
 		_, err = conn.Read(buffer)
 		if err == io.EOF {
-			log.Println(err)
-		}
-		if err != nil {
+			fmt.Println("Done!")
+			break
+		} else if err != nil {
 			log.Fatal(err)
 		}
-		fmt.Println(string(buffer))
+		// fmt.Println(string(buffer))
 	}
 }
 
@@ -45,7 +45,7 @@ func Connect(serviceTag string, waitTime int) {
 	entries := make(chan *zeroconf.ServiceEntry)
 	go func(results <-chan *zeroconf.ServiceEntry) {
 		for entry := range results {
-			log.Println(entry)
+			fmt.Println(entry)
 			connect(entry.HostName, entry.Port)
 		}
 		log.Println("No more entries.")
