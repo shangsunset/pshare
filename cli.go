@@ -1,56 +1,94 @@
 package main
 
 import (
-	"flag"
 	"fmt"
-	"log"
 	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
-	"github.com/shangsunset/pshare/p2p"
+	"github.com/urfave/cli"
 )
 
 func main() {
-	src := flag.String("src", "", "path to source file")
-	instanceName := flag.String("name", "", "service instance name")
-	flag.Parse()
+	app := cli.NewApp()
 
-	serviceTag := "_foobar._tcp"
-	waitTime := 50
-	clientNum := 0
-	if *src != "" {
-		s := p2p.NewServer(*instanceName, serviceTag, *src, waitTime, clientNum)
-
-		// Clean exit.
-		sig := make(chan os.Signal, 1)
-		signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
-		// Timeout timer.
-		var tc <-chan time.Time
-		if s.Duration > 0 {
-			tc = time.After(time.Second * time.Duration(s.Duration))
-		}
-
-		go func() {
-			select {
-			case <-sig:
-				// Exit by user
-				log.Println("Exited")
-				os.Exit(1)
-			case <-tc:
-				// Exit by timeout
-				log.Println("Timed out")
-				os.Exit(1)
-			}
-		}()
-
-		err := s.Register()
-		if err != nil {
-			log.Fatal(err)
-		}
-	} else {
-		fmt.Println("connecting...")
-		p2p.Connect(serviceTag, waitTime)
+	app.Commands = []cli.Command{
+		{
+			Name:    "share",
+			Aliases: []string{"s"},
+			Usage:   "share content with peers",
+			Flags: []cli.Flag{
+				cli.BoolFlag{
+					Name:  "private, p",
+					Usage: "make the sharing private with only one peer",
+				},
+			},
+			Action: func(c *cli.Context) error {
+				fmt.Println("sharing is private?", c.Bool("private"))
+				fmt.Println("sharing file:", c.Args())
+				return nil
+			},
+		},
+		{
+			Name:    "recv",
+			Aliases: []string{"r"},
+			Usage:   "receive content from sender",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "instance, i",
+					Usage: "service instance name",
+				},
+				cli.StringFlag{
+					Name:  "service, s",
+					Usage: "service name",
+				},
+			},
+			Action: func(c *cli.Context) error {
+				fmt.Println("instance", c.String("instance"))
+				fmt.Println("service", c.String("service"))
+				fmt.Println("receiving file:", c.Args())
+				return nil
+			},
+		},
 	}
+
+	app.Run(os.Args)
+	// serviceName := *serviceTag + "._tcp."
+	// waitTime := 50
+	// clientNum := 0
+	//
+	// // Clean exit.
+	// sig := make(chan os.Signal, 1)
+	// signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	// // Timeout timer.
+	// var tc <-chan time.Time
+	// if waitTime > 0 {
+	// 	tc = time.After(time.Second * time.Duration(waitTime))
+	// }
+	//
+	// go func() {
+	// 	select {
+	// 	case <-sig:
+	// 		// Exit by user
+	// 		log.Println("Exited")
+	// 		os.Exit(1)
+	// 	case <-tc:
+	// 		// Exit by timeout
+	// 		log.Println("Timed out")
+	// 		os.Exit(1)
+	// 	}
+	// }()
+	//
+	// if *src != "" {
+	// 	s := p2p.NewServer(*instanceName, serviceName, *src, waitTime, clientNum)
+	// 	err := s.Register()
+	// 	if err != nil {
+	// 		log.Fatal(err)
+	// 	}
+	// } else {
+	// 	c := p2p.NewClient(*instanceName, serviceName, waitTime)
+	// 	if instanceName != nil {
+	// 		c.Lookup()
+	// 	} else {
+	// 		c.Browse()
+	// 	}
+	// }
 }
