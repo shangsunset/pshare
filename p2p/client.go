@@ -16,11 +16,12 @@ type Client struct {
 	instanceName string
 	serviceName  string
 	waitTime     int
+	dest         string
 	resolver     *zeroconf.Resolver
 	entries      chan *zeroconf.ServiceEntry
 }
 
-func NewClient(instance, service string, waitTime int) *Client {
+func NewClient(instance, service string, dest string, waitTime int) *Client {
 	resolver, err := zeroconf.NewResolver(nil)
 	if err != nil {
 		log.Fatalln("failed to initialize resolver:", err.Error())
@@ -30,6 +31,7 @@ func NewClient(instance, service string, waitTime int) *Client {
 		instanceName: instance,
 		serviceName:  service,
 		waitTime:     waitTime,
+		dest:         dest,
 		resolver:     resolver,
 		entries:      make(chan *zeroconf.ServiceEntry),
 	}
@@ -49,7 +51,7 @@ func (c *Client) Lookup() {
 
 	err := c.resolver.Lookup(ctx, c.instanceName, c.serviceName, "local.", c.entries)
 	if err != nil {
-		log.Fatalln("Failed to browse:", err.Error())
+		log.Fatalln("Failed to lookup:", err.Error())
 	}
 
 	<-ctx.Done()

@@ -9,17 +9,18 @@ import (
 	"sync"
 
 	"github.com/grandcat/zeroconf"
+	"github.com/shangsunset/pshare/utils"
 )
 
 type Server struct {
-	Port         int
-	InstanceName string
-	ServiceTag   string
-	Duration     int
-	src          string
-	connNum      int
-	errCh        chan *clientErr
-	finishedCh   chan net.Addr
+	port       int
+	instance   string
+	service    string
+	duration   int
+	src        string
+	connNum    int
+	errCh      chan *clientErr
+	finishedCh chan net.Addr
 
 	mu          sync.Mutex
 	clientConns map[net.Addr]*net.TCPConn
@@ -30,23 +31,38 @@ type clientErr struct {
 	err  error
 }
 
-func NewServer(instance, tag, file string, duration, num int) *Server {
+func NewServer(instance, service, src string, duration, num int) *Server {
 	server := &Server{
-		Port:         freePort(),
-		InstanceName: instance,
-		ServiceTag:   tag,
-		Duration:     duration,
-		src:          file,
-		connNum:      num,
-		errCh:        make(chan *clientErr),
-		finishedCh:   make(chan net.Addr),
-		clientConns:  make(map[net.Addr]*net.TCPConn),
+		port:        utils.RandPort(),
+		instance:    instance,
+		service:     service,
+		duration:    duration,
+		src:         src,
+		connNum:     num,
+		errCh:       make(chan *clientErr),
+		finishedCh:  make(chan net.Addr),
+		clientConns: make(map[net.Addr]*net.TCPConn),
 	}
 	return server
 }
 
+func (s *Server) Register() error {
+	server, err := zeroconf.Register(s.instance, s.service, "local.", s.port, []string{"txtv=0", "lo=1", "la=2"}, nil)
+	if err != nil {
+		return fmt.Errorf("Zeroconf: %v", err)
+	}
+	defer server.Shutdown()
+
+	err = s.Open()
+	if err != nil {
+		return fmt.Errorf("Failed to open connection: %v\n", err)
+	}
+
+	return nil
+}
+
 func (s *Server) Open() error {
-	addr, err := net.ResolveTCPAddr("tcp", ":"+strconv.Itoa(s.Port))
+	addr, err := net.ResolveTCPAddr("tcp", ":"+strconv.Itoa(s.port))
 	if nil != err {
 		return err
 	}
@@ -63,23 +79,7 @@ func (s *Server) Open() error {
 	return nil
 }
 
-func (s *Server) Register() error {
-	server, err := zeroconf.Register(s.InstanceName, s.ServiceTag, "local.", s.Port, []string{"txtv=0", "lo=1", "la=2"}, nil)
-	if err != nil {
-		return err
-	}
-	defer server.Shutdown()
-
-	err = s.Open()
-	if err != nil {
-		return fmt.Errorf("Failed to open connection: %v\n", err)
-	}
-
-	return nil
-}
-
 func (s *Server) Serve(ln *net.TCPListener) error {
-	// duration := time.Now().Add(time.Duration(s.Duration) * time.Second)
 	finished := 0
 	go func() {
 		for {
