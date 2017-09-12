@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -15,7 +14,7 @@ import (
 
 func main() {
 
-	const waitTime = 50
+	const waitTime = 500
 
 	// Clean exit.
 	sig := make(chan os.Signal, 1)
@@ -30,11 +29,11 @@ func main() {
 		select {
 		case <-sig:
 			// Exit by user
-			log.Println("Exited")
+			fmt.Println("Exited")
 			os.Exit(1)
 		case <-tc:
 			// Exit by timeout
-			log.Println("Timed out")
+			fmt.Println("Timed out")
 			os.Exit(1)
 		}
 	}()
