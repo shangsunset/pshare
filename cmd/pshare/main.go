@@ -7,6 +7,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/shangsunset/pshare"
 	"github.com/shangsunset/pshare/utils"
 	"github.com/urfave/cli"
 )
