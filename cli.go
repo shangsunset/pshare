@@ -90,8 +90,7 @@ func main() {
 			Action: func(c *cli.Context) error {
 				instance := c.String("instance")
 				service := c.String("service")
-				dest := c.Args().First()
-				client := p2p.NewClient(instance, service, dest, waitTime)
+				client := p2p.NewClient(instance, service, waitTime)
 				if instance != "" {
 					client.Lookup()
 				} else {

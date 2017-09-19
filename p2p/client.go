@@ -3,13 +3,13 @@ package p2p
 import (
 	"bufio"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/grandcat/zeroconf"
@@ -19,12 +19,11 @@ type Client struct {
 	instanceName string
 	serviceName  string
 	waitTime     int
-	dest         string
 	resolver     *zeroconf.Resolver
 	entries      chan *zeroconf.ServiceEntry
 }
 
-func NewClient(instance, service string, dest string, waitTime int) *Client {
+func NewClient(instance, service string, waitTime int) *Client {
 	resolver, err := zeroconf.NewResolver(nil)
 	if err != nil {
 		log.Fatalln("failed to initialize resolver:", err.Error())
@@ -34,7 +33,6 @@ func NewClient(instance, service string, dest string, waitTime int) *Client {
 		instanceName: instance,
 		serviceName:  service,
 		waitTime:     waitTime,
-		dest:         dest,
 		resolver:     resolver,
 		entries:      make(chan *zeroconf.ServiceEntry),
 	}
@@ -94,33 +92,44 @@ func (c *Client) connect(host string, port int) error {
 }
 
 func (c *Client) receive(conn *net.TCPConn) error {
-	if _, err := os.Stat(c.dest); os.IsNotExist(err) {
-		fout, err := os.Create(c.dest)
-		if err != nil {
+	buf := make([]byte, 100)
+
+	_, err := conn.Read(buf)
+	if err != nil {
+		return fmt.Errorf("Failed to receive file name: %v", err)
+	}
+	sep := ";;;"
+	data := strings.Split(string(buf), sep)
+	var response string
+	fmt.Fprintf(os.Stderr, "Accept %s? (Y/n) ", data[0])
+	fmt.Fscanf(os.Stderr, "%s", &response)
+
+	if response != "y" && response != "Y" {
+		return nil
+	}
+	fout, err := os.Create(data[0])
+	if err != nil {
+		return err
+	}
+	defer fout.Close()
+
+	w := bufio.NewWriter(fout)
+
+	buf = make([]byte, 1024)
+	for {
+		n, err := conn.Read(buf)
+		if err == io.EOF {
+			fmt.Println("Done!")
+			break
+		} else if err != nil {
 			return err
 		}
-		defer fout.Close()
-
-		w := bufio.NewWriter(fout)
-		buf := make([]byte, 1024)
-
-		for {
-			n, err := conn.Read(buf)
-			if err == io.EOF {
-				fmt.Println("Done!")
-				break
-			} else if err != nil {
-				return err
-			}
-			if _, err := w.Write(buf[:n]); err != nil {
-				return err
-			}
-			if err = w.Flush(); err != nil {
-				return err
-			}
+		if _, err := w.Write(buf[:n]); err != nil {
+			return err
 		}
-	} else {
-		return errors.New("File already exists.")
+		if err = w.Flush(); err != nil {
+			return err
+		}
 	}
 	return nil
 }

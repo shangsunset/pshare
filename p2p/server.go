@@ -19,14 +19,14 @@ type Server struct {
 	duration   int
 	src        string
 	connNum    int
-	errCh      chan *clientErr
+	errCh      chan *connErr
 	finishedCh chan net.Addr
 
 	mu          sync.Mutex
 	clientConns map[net.Addr]*net.TCPConn
 }
 
-type clientErr struct {
+type connErr struct {
 	addr net.Addr
 	err  error
 }
@@ -39,7 +39,7 @@ func NewServer(instance, service, src string, duration, num int) *Server {
 		duration:    duration,
 		src:         src,
 		connNum:     num,
-		errCh:       make(chan *clientErr),
+		errCh:       make(chan *connErr),
 		finishedCh:  make(chan net.Addr),
 		clientConns: make(map[net.Addr]*net.TCPConn),
 	}
@@ -127,10 +127,15 @@ func (s *Server) Serve(ln *net.TCPListener) error {
 func (s *Server) handleConn(conn *net.TCPConn) {
 	f, err := os.Open(s.src)
 	if err != nil {
-		s.errCh <- &clientErr{conn.RemoteAddr(), err}
+		s.errCh <- &connErr{conn.RemoteAddr(), err}
 	}
 	defer f.Close()
 
+	sep := ";;;"
+	_, err = conn.Write([]byte(s.src + sep))
+	if err != nil {
+		s.errCh <- &connErr{conn.RemoteAddr(), fmt.Errorf("Initial write failed: %v", err)}
+	}
 	buf := make([]byte, 1024)
 	for {
 		n, err := f.Read(buf)
@@ -139,9 +144,12 @@ func (s *Server) handleConn(conn *net.TCPConn) {
 			break
 		}
 		if err != nil {
-			s.errCh <- &clientErr{conn.RemoteAddr(), err}
+			s.errCh <- &connErr{conn.RemoteAddr(), err}
 			return
 		}
-		conn.Write(buf[:n])
+		_, err = conn.Write(buf[:n])
+		if err != nil {
+			s.errCh <- &connErr{conn.RemoteAddr(), err}
+		}
 	}
 }
