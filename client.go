@@ -98,16 +98,20 @@ func (c *Client) receive(conn *net.TCPConn) error {
 	if err != nil {
 		return fmt.Errorf("Failed to receive file name: %v", err)
 	}
+
 	sep := ";;;"
 	data := strings.Split(string(buf), sep)
+	filename := data[0]
+
 	var response string
-	fmt.Fprintf(os.Stderr, "Accept %s? (Y/n) ", data[0])
+	fmt.Fprintf(os.Stderr, "Accept %s? [Y/n] ", filename)
 	fmt.Fscanf(os.Stderr, "%s", &response)
 
 	if response != "y" && response != "Y" {
 		return nil
 	}
-	fout, err := os.Create(data[0])
+
+	fout, err := os.Create(filename)
 	if err != nil {
 		return err
 	}
@@ -115,12 +119,20 @@ func (c *Client) receive(conn *net.TCPConn) error {
 
 	w := bufio.NewWriter(fout)
 
+	if _, err = w.Write([]byte(data[1])); err != nil {
+		return fmt.Errorf("Initial file write failed: %v", err)
+	}
+	if err = w.Flush(); err != nil {
+		return err
+	}
+
 	buf = make([]byte, 1024)
+
 	for {
 		n, err := conn.Read(buf)
 		if err == io.EOF {
 			fmt.Println("Done!")
-			break
+			return nil
 		} else if err != nil {
 			return err
 		}

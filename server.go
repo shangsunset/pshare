@@ -92,7 +92,7 @@ func (s *Server) Serve(ln *net.TCPListener) error {
 				}
 				return
 			case c := <-s.finishedCh:
-				fmt.Printf("%v is done receiving\n", c)
+				fmt.Printf("Done sending to %v\n", c)
 				err := s.clientConns[c].Close()
 				if err != nil {
 					fmt.Errorf("Failded to close client connection: %v\n", err)
@@ -134,14 +134,14 @@ func (s *Server) handleConn(conn *net.TCPConn) {
 	sep := ";;;"
 	_, err = conn.Write([]byte(s.src + sep))
 	if err != nil {
-		s.errCh <- &connErr{conn.RemoteAddr(), fmt.Errorf("Initial write failed: %v", err)}
+		s.errCh <- &connErr{conn.RemoteAddr(), fmt.Errorf("Initial connnection write failed: %v", err)}
 	}
 	buf := make([]byte, 1024)
 	for {
 		n, err := f.Read(buf)
 		if err == io.EOF {
 			s.finishedCh <- conn.RemoteAddr()
-			break
+			return
 		}
 		if err != nil {
 			s.errCh <- &connErr{conn.RemoteAddr(), err}
@@ -150,6 +150,7 @@ func (s *Server) handleConn(conn *net.TCPConn) {
 		_, err = conn.Write(buf[:n])
 		if err != nil {
 			s.errCh <- &connErr{conn.RemoteAddr(), err}
+			return
 		}
 	}
 }
