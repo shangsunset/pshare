@@ -55,7 +55,7 @@ func (s *Server) Register() error {
 
 	err = s.Open()
 	if err != nil {
-		return fmt.Errorf("Failed to open connection: %v\n", err)
+		return fmt.Errorf("Problem with connection: %v\n", err)
 	}
 
 	return nil
@@ -92,7 +92,7 @@ func (s *Server) Serve(ln *net.TCPListener) error {
 				}
 				return
 			case c := <-s.finishedCh:
-				fmt.Printf("Done sending to %v\n", c)
+				fmt.Printf("Finished transfering to %v\n", c)
 				err := s.clientConns[c].Close()
 				if err != nil {
 					fmt.Errorf("Failded to close client connection: %v\n", err)
@@ -107,6 +107,7 @@ func (s *Server) Serve(ln *net.TCPListener) error {
 						fmt.Errorf("Failded to shut done listener: %v\n", err)
 					}
 					fmt.Println("connection closed")
+					os.Exit(1)
 				}
 				return
 			}

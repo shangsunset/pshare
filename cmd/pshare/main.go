@@ -59,11 +59,11 @@ func main() {
 				instance = utils.RandString(20)
 				src = c.Args().First()
 
+				fmt.Println("Your service name:", service)
 				if c.Bool("private") {
 					clientNum = 1
 					fmt.Println("Your instance name:", instance)
 				}
-				fmt.Println("Your service name:", service)
 
 				s := pshare.NewServer(instance, service, src, waitTime, clientNum)
 				err := s.Register()

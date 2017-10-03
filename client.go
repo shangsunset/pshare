@@ -26,7 +26,7 @@ type Client struct {
 func NewClient(instance, service string, waitTime int) *Client {
 	resolver, err := zeroconf.NewResolver(nil)
 	if err != nil {
-		log.Fatalln("failed to initialize resolver:", err.Error())
+		fmt.Println("failed to initialize resolver:", err.Error())
 	}
 
 	c := Client{
@@ -92,7 +92,7 @@ func (c *Client) connect(host string, port int) error {
 }
 
 func (c *Client) receive(conn *net.TCPConn) error {
-	buf := make([]byte, 100)
+	buf := make([]byte, 1024)
 
 	_, err := conn.Read(buf)
 	if err != nil {
@@ -120,13 +120,11 @@ func (c *Client) receive(conn *net.TCPConn) error {
 	w := bufio.NewWriter(fout)
 
 	if _, err = w.Write([]byte(data[1])); err != nil {
-		return fmt.Errorf("Initial file write failed: %v", err)
+		return fmt.Errorf("Initial write to buffer failed: %v", err)
 	}
 	if err = w.Flush(); err != nil {
 		return err
 	}
-
-	buf = make([]byte, 1024)
 
 	for {
 		n, err := conn.Read(buf)
