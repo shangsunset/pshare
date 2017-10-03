@@ -59,10 +59,10 @@ func main() {
 				instance = utils.RandString(20)
 				src = c.Args().First()
 
-				fmt.Println("Your service name:", service)
+				fmt.Println("Your service hash to share:", service)
 				if c.Bool("private") {
 					clientNum = 1
-					fmt.Println("Your instance name:", instance)
+					fmt.Println("Your private instance hash to share:", instance)
 				}
 
 				s := pshare.NewServer(instance, service, src, waitTime, clientNum)
@@ -79,12 +79,12 @@ func main() {
 			Usage:   "receive content from peer",
 			Flags: []cli.Flag{
 				cli.StringFlag{
-					Name:  "instance, i",
-					Usage: "service instance name",
+					Name:  "service, s",
+					Usage: "service hash",
 				},
 				cli.StringFlag{
-					Name:  "service, s",
-					Usage: "service name",
+					Name:  "private, p",
+					Usage: "hash for private instance",
 				},
 			},
 			Action: func(c *cli.Context) error {
