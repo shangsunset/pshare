@@ -2,13 +2,13 @@
 
 > A peer to peer file sharing command line tool.
 
-## Install
+## Installation
 
 ```
 go get -u github.com/shangsunset/pshare/cmd/psh
 ```
 
-## Use
+## Usage
 
 ```
 NAME:
@@ -55,3 +55,5 @@ Receive from private sharing
 ```
 psh recv -s {hashA} -p {hashB}
 ```
+
+[MIT](./LICENSE)
